@@ -1,316 +1,412 @@
+<div align="center">
+
 # CodeArena
 
-CodeArena is a backend RESTful platform built with **Spring Boot 3** and **PostgreSQL** for managing coding challenges, user authentication, and solution submissions.
+**A modern, full-stack online coding assessment platform and algorithmic challenge catalogue.**
 
-> **Note on Project Status:** The core Problem management, User authentication (JWT + BCrypt), and Submission intake APIs are implemented and fully tested. Sandboxed code execution, automated judging engines, contests, and containerized deployment are planned for future phases (see [Roadmap](#future-roadmap)).
+[![Java 17](https://img.shields.io/badge/Java-17%2B-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3.5-6DB33F?style=for-the-badge&logo=spring-boot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Spring Security](https://img.shields.io/badge/Spring_Security-6.x-6DB33F?style=for-the-badge&logo=spring-security&logoColor=white)](https://spring.io/projects/spring-security)
+[![React](https://img.shields.io/badge/React-18-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-5.x-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.x-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Swagger / OpenAPI 3](https://img.shields.io/badge/OpenAPI-3.0-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](https://swagger.io/)
 
----
+[Architecture](docs/architecture.md) • [Swagger UI](#api-documentation--swagger-ui) • [Local Setup](#local-setup--quick-start) • [Database Seeding](#database-seeding--admin-bootstrap) • [Testing](#running-automated-tests) • [Roadmap](#future-development-roadmap)
 
-## Table of Contents
-- [Overview](#overview)
-- [Current Implemented Features](#current-implemented-features)
-- [Technology Stack](#technology-stack)
-- [Project Architecture & Directory Structure](#project-architecture--directory-structure)
-- [Prerequisites](#prerequisites)
-- [Local Setup & Installation](#local-setup--installation)
-  - [1. Clone Repository](#1-clone-repository)
-  - [2. PostgreSQL Database Setup](#2-postgresql-database-setup)
-  - [3. Environment Variables Configuration](#3-environment-variables-configuration)
-- [Running the Application](#running-the-application)
-- [Running Automated Tests](#running-automated-tests)
-- [API Endpoints Reference](#api-endpoints-reference)
-- [Future Roadmap](#future-roadmap)
-- [Security & Contribution Guidelines](#security--contribution-guidelines)
+</div>
 
 ---
 
-## Overview
+## Overview & Problem Statement
 
-CodeArena provides the foundational services needed for an online coding judge platform. It exposes RESTful APIs for:
-- User registration, authentication, and role management.
-- Comprehensive CRUD operations for algorithmic coding problems with test cases and examples.
-- Code submission intake with ownership controls and status tracking.
+Technical recruitment and algorithmic practice platforms often rely on opaque, tightly coupled architectures that are difficult to inspect, maintain, or self-host. 
+
+**CodeArena** solves this by providing a clean, decoupled, full-stack platform featuring:
+- A responsive, single-page client built with **React 18, TypeScript, Tailwind CSS**, and the **Monaco Editor** (the code editor that powers VS Code).
+- A robust, stateless **Spring Boot 3** REST API secured with **Spring Security 6** and **HMAC-SHA256 JWT** authentication.
+- Relational data persistence with **PostgreSQL** and **Hibernate ORM**, including automated database seeding with 10 foundational algorithm challenges.
+- Standardized **RFC 7807 Problem Detail** error formats and interactive **OpenAPI 3 / Swagger UI** documentation.
+
+> [!NOTE]
+> **Implementation Scope:** CodeArena currently implements complete problem management, user authentication, role-based authorization, problem exploration, Monaco-powered solution intake, and database seeding. Code submissions are validated and recorded with `PENDING` status. Isolated sandboxed code execution is scheduled for the next development milestone (see [Current Limitations](#current-limitations) and [Roadmap](#future-development-roadmap)).
 
 ---
 
-## Current Implemented Features
+## Key Implemented Features
 
-### 1. User & Authentication Management
-- **Registration & Login:** Endpoints for creating accounts and authenticating with credentials.
-- **Stateless JWT Security:** Authentication via standard `Authorization: Bearer <token>` HTTP headers.
-- **Password Security:** Password hashing using `BCryptPasswordEncoder`.
-- **Role-Based Access Control (RBAC):** Distinct roles (`ROLE_USER`, `ROLE_ADMIN`) governing endpoint access.
-- **Profile Endpoint:** Authenticated `/api/auth/me` to inspect the caller's profile.
+### 1. User Authentication & Role-Based Access Control (RBAC)
+- **Stateless JWT Security:** Standard `Authorization: Bearer <token>` authentication with configurable expiration.
+- **Secure Password Storage:** Industry-standard password hashing using `BCryptPasswordEncoder`.
+- **Granular Permissions:** Two distinct roles (`ROLE_USER` and `ROLE_ADMIN`) with method-level authorization.
+- **Token Management:** Client-side Axios interceptor automatically attaches tokens and handles token expiration / 401 redirections.
+- **User Profile API:** Dedicated `/api/auth/me` endpoint to verify authentication state and retrieve user details.
 
-### 2. Problem Management
-- **Full CRUD for Admins:** Only administrators (`ROLE_ADMIN`) can create, update, or delete coding problems.
-- **Public Browsing:** Unauthenticated users can view problem details and lists.
-- **Search, Filter & Pagination:** Query problems by search term and difficulty (`EASY`, `MEDIUM`, `HARD`) with configurable pagination and sorting (`createdAt`, `difficulty`, `title`, `id`).
-- **Entity Relationships:** One-to-many cascading relationships for problem examples and test cases.
+### 2. Algorithmic Problem Management & Discovery
+- **Public Problem Browsing:** Unauthenticated guests can search, filter, and inspect coding challenges.
+- **Dynamic Search & Filtering:** Case-insensitive search across problem titles and descriptions; filtering by difficulty (`EASY`, `MEDIUM`, `HARD`).
+- **Pagination & Sorting:** Configurable page size and sorting by creation timestamp, title, or difficulty.
+- **Information Protection:** Public problem endpoints serve examples while strictly concealing hidden evaluation test cases (`isHidden = true`).
+- **Admin Problem Authoring:** Administrators can create, update, and delete coding problems with cascading test cases and examples.
 
-### 3. Submission Intake
-- **Authenticated Submission:** Logged-in users can submit solutions for problems across multiple languages (`JAVA`, `PYTHON`, `CPP`, `JAVASCRIPT`, `GO`, `RUST`).
-- **Initial State Tracking:** Submissions are persisted with `PENDING` status, recording problem ID, user ID, language, source code, and submission timestamp.
-- **Ownership Verification:** Users can only view their own submissions (`/api/submissions/my` and `/api/submissions/{id}`). Non-owner access is forbidden (`403 Forbidden`) unless requested by an administrator.
+### 3. In-Browser Code Editor (Monaco Editor)
+- **VS Code Engine:** Embedded `@monaco-editor/react` editor in dark theme (`vs-dark`).
+- **Multi-Language Support:** Starter code templates and syntax highlighting for **Java**, **Python**, **C++**, **JavaScript**, **Go**, and **Rust**.
+- **Editor Ergonomics:** Line numbers, mini-map, tab indentation, and responsive split-pane layout.
 
-### 4. Robust Error Handling & Validation
-- **RFC 7807 Problem Details:** Consistent JSON error structure across 400 (Bad Request / Validation errors), 403 (Forbidden / Access Denied), and 404 (Not Found).
-- **Jakarta Bean Validation:** Comprehensive constraints on DTO fields (`@NotBlank`, `@NotNull`, `@Size`, etc.).
+### 4. Solution Submission Intake
+- **Authenticated Submissions:** Registered candidates can submit solutions with source code and chosen language.
+- **Audit & Status Tracking:** Submissions are persisted in PostgreSQL with initial `PENDING` status, recording problem ID, user ID, language, source code, and timestamp.
+- **Ownership Enforcement:** Candidates can inspect their own submission history (`/api/submissions/my` and `/api/submissions/{id}`). Unauthorized access attempts return HTTP 403 Forbidden.
+
+### 5. Automated Database Seeding & Admin Bootstrap
+- **Idempotent Data Seeder:** On startup, `DatabaseSeeder` inserts 10 foundational algorithm problems covering:
+  - *Arrays, Strings, Hash Maps, Binary Search, Two Pointers, Sliding Window, Stack, and Recursion.*
+- **Admin Bootstrapping:** Safely creates an initial administrator account from environment variables (`ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`) without storing credentials in source control.
+
+### 6. Developer Experience & API Documentation
+- **Interactive Swagger UI:** Test endpoints directly via browser at `/swagger-ui/index.html` with Bearer token authentication support.
+- **RFC 7807 Problem Details:** Unified JSON error structures for validation errors (400), authentication failures (401), access denial (403), and missing resources (404).
+- **CORS Configured:** Pre-configured for local frontend development (`localhost:5173`, `localhost:3000`).
 
 ---
 
 ## Technology Stack
 
-- **Language:** Java 17+
-- **Framework:** Spring Boot 3.3.5
-  - Spring Boot Starter Web (REST APIs)
-  - Spring Boot Starter Data JPA (Hibernate ORM)
-  - Spring Boot Starter Security (Spring Security 6)
-  - Spring Boot Starter Validation (Hibernate Validator)
-  - Spring Boot DevTools (Developer tooling)
-- **Database:** PostgreSQL (production / local), H2 in-memory (automated test profile)
-- **Token Security:** `jjwt` (Java JWT 0.12.6)
-- **Build Tool:** Apache Maven
-- **Testing:** JUnit 5, Mockito, AssertJ, Spring Security Test, Spring Boot Test (MockMvc)
+| Category | Technologies |
+| :--- | :--- |
+| **Frontend** | React 18, TypeScript 5, Vite 5, Tailwind CSS 3, React Router v6, Axios, Monaco Editor (`@monaco-editor/react`), Lucide React |
+| **Frontend Testing** | Vitest, React Testing Library, JSDOM |
+| **Backend** | Java 17, Spring Boot 3.3.5 (Spring MVC, Spring Data JPA, Spring Security 6, Spring Validation) |
+| **Token Security** | Java JWT (`jjwt` 0.12.6, HMAC-SHA256) |
+| **Database** | PostgreSQL 14+ (Local/Persistent), H2 Database (In-Memory Testing) |
+| **API Documentation**| SpringDoc OpenAPI 3 / Swagger UI (`springdoc-openapi-starter-webmvc-ui` 2.6.0) |
+| **Build & Tooling** | Apache Maven 3.8+, Node.js 18+, npm 9+ |
+| **Backend Testing** | JUnit 5, Mockito, AssertJ, Spring Boot Test (`MockMvc`) |
 
 ---
 
-## Project Architecture & Directory Structure
+## System Architecture
 
-The project follows a standard layered architecture with clear separation of concerns:
+```mermaid
+flowchart TD
+    subgraph Client["Frontend Client (React 18 + TypeScript)"]
+        Pages["SPA Pages<br/>(Landing, Auth, Dashboard, Problems, Submissions)"]
+        Editor["Monaco Code Editor<br/>(Multi-language templates)"]
+        Axios["Axios Client<br/>(JWT Interceptor & Error Normalizer)"]
+        Pages --> Axios
+        Editor --> Axios
+    end
 
+    subgraph Security["Spring Security 6 Gateway"]
+        CORS["CORS Filter"]
+        JWTFilter["JwtAuthenticationFilter<br/>(Bearer Token Validation)"]
+        SecurityContext["SecurityContext<br/>(ROLE_USER / ROLE_ADMIN)"]
+        CORS --> JWTFilter --> SecurityContext
+    end
+
+    subgraph Controllers["REST Controllers"]
+        AuthController["AuthController (/api/auth)"]
+        ProblemController["ProblemController (/api/problems)"]
+        SubmissionController["SubmissionController (/api/submissions)"]
+        Swagger["Swagger UI (/swagger-ui/index.html)"]
+    end
+
+    subgraph Services["Service Layer"]
+        UserService["UserService"]
+        ProblemService["ProblemService"]
+        SubmissionService["SubmissionService"]
+        JwtService["JwtService"]
+    end
+
+    subgraph Data["Persistence Layer"]
+        Repo["JPA Repositories<br/>(User, Problem, Submission)"]
+        Seeder["DatabaseSeeder<br/>(10 Problems + Admin Bootstrap)"]
+        DB[("PostgreSQL Database")]
+        Repo --> DB
+        Seeder --> DB
+    end
+
+    Axios -->|"HTTP / JSON (Bearer Token)"| CORS
+    SecurityContext --> Controllers
+    Controllers --> Services
+    Services --> Repo
 ```
+
+> For deep-dive sequence diagrams, authorization rules, and data models, see [Architecture & System Design](docs/architecture.md).
+
+---
+
+## Visual Previews
+
+| View | Preview |
+| :--- | :--- |
+| **Landing Page** | Explore the platform, view features, and navigate to the problem catalogue. <br/>*(See `docs/screenshots/landing.png`)* |
+| **Problem Explorer** | Filter challenges by difficulty (`EASY`, `MEDIUM`, `HARD`), search in real-time, and view pagination controls. <br/>*(See `docs/screenshots/problems.png`)* |
+| **Monaco Code Editor** | Split-pane challenge view with full problem description, test examples, language selector, and code editor. <br/>*(See `docs/screenshots/problem-detail.png`)* |
+| **User Dashboard** | High-level candidate stats, role indicators, and quick links to practice challenges. <br/>*(See `docs/screenshots/dashboard.png`)* |
+| **Submission History** | Review submitted solutions, target problem, programming language, timestamp, and intake status. <br/>*(See `docs/screenshots/submissions.png`)* |
+
+> [!TIP]
+> To capture or update visual screenshots locally, follow the step-by-step [Screenshot Capture Guide](docs/screenshots/README.md).
+
+---
+
+## Project Structure
+
+```text
 codearena/
-├── pom.xml                                      # Maven build descriptor and dependencies
-├── .gitignore                                   # Git ignore rules for build, secrets, and IDE files
-├── application.properties.example               # Root configuration example with safe placeholders
+├── pom.xml                                      # Maven dependencies and build configuration
+├── .gitignore                                   # Ignore rules for build artifacts, node_modules & credentials
+├── application.properties.example               # Root configuration template with safe placeholders
 ├── README.md                                    # Project documentation
-├── src/
-│   ├── main/
-│   │   ├── java/com/codearena/
-│   │   │   ├── CodeArenaApplication.java        # Spring Boot main entry point
-│   │   │   ├── config/                          # Security & JWT filter configuration
-│   │   │   │   ├── JwtAuthenticationFilter.java # Intercepts and validates Bearer tokens
-│   │   │   │   └── SecurityConfig.java          # SecurityFilterChain and endpoint authorizations
-│   │   │   ├── controller/                      # REST controllers (API endpoints)
-│   │   │   │   ├── AuthController.java
-│   │   │   │   ├── ProblemController.java
-│   │   │   │   └── SubmissionController.java
-│   │   │   ├── dto/                             # Request and response data transfer objects
-│   │   │   │   ├── AuthDTO.java
-│   │   │   │   ├── ExampleDTO.java
-│   │   │   │   ├── PageResponse.java
-│   │   │   │   ├── ProblemDTO.java
-│   │   │   │   ├── SubmissionDTO.java
-│   │   │   │   └── TestCaseDTO.java
-│   │   │   ├── entity/                          # JPA database entities
-│   │   │   │   ├── Difficulty.java              # Enum: EASY, MEDIUM, HARD
-│   │   │   │   ├── Example.java
-│   │   │   │   ├── Language.java                # Enum: JAVA, PYTHON, CPP, JAVASCRIPT, GO, RUST
-│   │   │   │   ├── Problem.java
-│   │   │   │   ├── Role.java                    # Enum: USER, ADMIN
-│   │   │   │   ├── Submission.java
-│   │   │   │   ├── SubmissionStatus.java        # Enum: PENDING, IN_QUEUE, ACCEPTED, etc.
-│   │   │   │   ├── TestCase.java
-│   │   │   │   └── User.java
-│   │   │   ├── exception/                       # Custom exceptions & global RFC 7807 handler
-│   │   │   │   ├── GlobalExceptionHandler.java
-│   │   │   │   └── ResourceNotFoundException.java
-│   │   │   ├── repository/                      # Spring Data JPA repositories
-│   │   │   │   ├── ProblemRepository.java
-│   │   │   │   ├── ProblemSpecification.java
-│   │   │   │   ├── SubmissionRepository.java
-│   │   │   │   └── UserRepository.java
-│   │   │   └── service/                         # Business logic interfaces and implementations
-│   │   │       ├── JwtService.java
-│   │   │       ├── ProblemMapper.java
-│   │   │       ├── ProblemService.java
-│   │   │       ├── ProblemServiceImpl.java
-│   │   │       ├── SubmissionService.java
-│   │   │       ├── SubmissionServiceImpl.java
-│   │   │       ├── UserService.java
-│   │   │       └── UserServiceImpl.java
-│   │   └── resources/
-│   │       ├── application.properties           # Application configuration reading env variables
-│   │       └── application.properties.example   # Example template with configuration instructions
-│   └── test/
-│       ├── java/com/codearena/                  # Unit and integration test suite
-│       │   ├── SecurityIntegrationTest.java     # End-to-end integration tests with H2
-│       │   ├── config/JwtAuthenticationFilterTest.java
-│       │   ├── controller/
-│       │   │   ├── AuthControllerTest.java
-│       │   │   ├── ProblemControllerTest.java
-│       │   │   └── SubmissionControllerTest.java
-│       │   ├── repository/ProblemRepositoryTest.java
-│       │   └── service/
-│       │       ├── ProblemServiceImplTest.java
-│       │       ├── SubmissionServiceImplTest.java
-│       │       └── UserServiceImplTest.java
-│       └── resources/
-│           └── application-test.properties      # Test profile properties (in-memory H2)
+│
+├── docs/                                        # Architecture and documentation
+│   ├── architecture.md                          # Detailed architectural design and sequence diagrams
+│   └── screenshots/                             # Visual previews and capture guide
+│       └── README.md
+│
+├── frontend/                                    # React + TypeScript single-page application
+│   ├── package.json                             # Frontend dependencies and scripts
+│   ├── vite.config.ts                           # Vite configuration and backend API proxy
+│   ├── tailwind.config.js                       # Tailwind CSS styling configuration
+│   ├── tsconfig.json                            # TypeScript compiler configuration
+│   ├── .env.example                             # Frontend environment template
+│   └── src/
+│       ├── api/                                 # Axios client and API service modules
+│       │   ├── client.ts                        # Axios instance with JWT interceptor & error parsing
+│       │   ├── auth.ts                          # Registration, login, profile APIs
+│       │   ├── problems.ts                      # Problem querying & detail retrieval
+│       │   └── submissions.ts                   # Submission intake & user history
+│       ├── components/                          # Reusable UI components
+│       │   ├── common/                          # Navbar, Footer, Button, Card, Badge, LoadingSpinner
+│       │   ├── problem/                         # CodeEditor, ProblemCard, ProblemFilter
+│       │   └── submission/                      # SubmissionRow
+│       ├── context/                             # React Context (AuthContext)
+│       ├── pages/                               # Page routes (Landing, Auth, Dashboard, Problems, etc.)
+│       ├── types/                               # TypeScript interfaces and contracts
+│       └── test/                                # Frontend test suite (Vitest + RTL)
+│
+└── src/                                         # Spring Boot backend application
+    ├── main/
+    │   ├── java/com/codearena/
+    │   │   ├── CodeArenaApplication.java        # Spring Boot entry point
+    │   │   ├── config/                          # Security, JWT, OpenAPI & Database Seeder
+    │   │   │   ├── DatabaseSeeder.java          # 10 problems + Admin bootstrap runner
+    │   │   │   ├── JwtAuthenticationFilter.java # Bearer token verification filter
+    │   │   │   ├── OpenApiConfig.java           # Swagger / OpenAPI 3 configuration
+    │   │   │   └── SecurityConfig.java          # SecurityFilterChain and CORS definition
+    │   │   ├── controller/                      # REST controllers (Auth, Problem, Submission)
+    │   │   ├── dto/                             # Request and response transfer objects
+    │   │   ├── entity/                          # JPA entities (User, Problem, Example, TestCase, Submission)
+    │   │   ├── exception/                       # Custom exceptions & RFC 7807 GlobalExceptionHandler
+    │   │   ├── repository/                      # Spring Data JPA repositories and Specifications
+    │   │   └── service/                         # Business logic services and implementations
+    │   └── resources/
+    │       ├── application.properties           # Spring configuration reading environment variables
+    │       └── application.properties.example   # Safe placeholder template
+    └── test/                                    # Backend automated test suite
+        ├── java/com/codearena/                  # JUnit 5 & Mockito tests (54 passing tests)
+        └── resources/application-test.properties# In-memory H2 test configuration
 ```
 
 ---
 
 ## Prerequisites
 
-- **Java Development Kit (JDK):** Version 17 or higher
-- **Apache Maven:** Version 3.8+ (or Maven wrapper)
-- **PostgreSQL Database:** Version 14 or higher running locally or accessible via network
+Before running CodeArena locally, verify you have the following installed:
+
+- **Java Development Kit (JDK):** Version 17 or higher (`java -version`)
+- **Apache Maven:** Version 3.8+ (`mvn -version`)
+- **Node.js:** Version 18.x or higher (`node -v`)
+- **npm:** Version 9.x or higher (`npm -v`)
+- **PostgreSQL:** Version 14 or higher running locally or in a container (`psql --version`)
 
 ---
 
-## Local Setup & Installation
+## Local Setup & Quick Start
 
-### 1. Clone Repository
+### 1. Clone the Repository
 ```bash
-git clone https://github.com/<your-username>/codearena.git
+git clone https://github.com/vidushitripa4thi/codearena.git
 cd codearena
 ```
 
-### 2. PostgreSQL Database Setup
-Ensure PostgreSQL service is running and create the database:
+### 2. Configure the PostgreSQL Database
+Connect to your local PostgreSQL instance and create the database:
 ```sql
 CREATE DATABASE codearena;
 ```
 
-Verify you have user credentials (e.g., `postgres`) with read/write access to `codearena`.
-
 ### 3. Environment Variables Configuration
 
-CodeArena reads its sensitive credentials and environment-specific settings from environment variables.
+CodeArena uses environment variables to inject sensitive credentials without committing them to source control.
 
-| Environment Variable | Description | Default Value | Required? |
-|----------------------|-------------|---------------|-----------|
+| Variable | Description | Default (if unset) | Required |
+| :--- | :--- | :--- | :--- |
 | `DB_URL` | PostgreSQL JDBC connection URL | `jdbc:postgresql://localhost:5432/codearena` | No |
-| `DB_USERNAME` | PostgreSQL database username | `postgres` | No |
-| `DB_PASSWORD` | PostgreSQL database password | *(empty)* | **Yes** (in production/local) |
-| `JWT_SECRET` | 256-bit (>= 32 chars) HMAC secret key | *(empty)* | **Yes** |
-| `JWT_EXPIRATION_MINUTES` | Token lifetime in minutes | `60` | No |
+| `DB_USERNAME` | PostgreSQL username | `postgres` | No |
+| `DB_PASSWORD` | PostgreSQL password | *(empty)* | **Yes** |
+| `JWT_SECRET` | HMAC-SHA256 secret (>= 32 chars) | *(empty)* | **Yes** |
+| `JWT_EXPIRATION_MINUTES` | Token validity in minutes | `60` | No |
+| `SEED_DATA` | Automatically seed 10 problems on startup | `true` | No |
+| `ADMIN_USERNAME` | Username for bootstrap admin | *(empty)* | Optional |
+| `ADMIN_EMAIL` | Email for bootstrap admin | *(empty)* | Optional |
+| `ADMIN_PASSWORD` | Password for bootstrap admin | *(empty)* | Optional |
+| `VITE_API_BASE_URL` | Frontend API base route | `/api` | No |
 
-#### Setting Environment Variables
-
-**Windows (PowerShell):**
+#### Setting Environment Variables on Windows (PowerShell):
 ```powershell
 $env:DB_URL="jdbc:postgresql://localhost:5432/codearena"
 $env:DB_USERNAME="postgres"
 $env:DB_PASSWORD="your_postgres_password"
-$env:JWT_SECRET="your-secure-jwt-secret-key-at-least-32-characters"
+$env:JWT_SECRET="codearena-jwt-secret-key-that-is-at-least-256-bits-long-32-bytes"
 $env:JWT_EXPIRATION_MINUTES="60"
+$env:SEED_DATA="true"
+$env:ADMIN_USERNAME="admin"
+$env:ADMIN_EMAIL="admin@codearena.com"
+$env:ADMIN_PASSWORD="AdminPassword123!"
 ```
 
-**Windows (Command Prompt):**
-```cmd
-set DB_URL=jdbc:postgresql://localhost:5432/codearena
-set DB_USERNAME=postgres
-set DB_PASSWORD=your_postgres_password
-set JWT_SECRET=your-secure-jwt-secret-key-at-least-32-characters
-set JWT_EXPIRATION_MINUTES=60
-```
-
-**Linux / macOS (Bash / Zsh):**
-```bash
-export DB_URL="jdbc:postgresql://localhost:5432/codearena"
-export DB_USERNAME="postgres"
-export DB_PASSWORD="your_postgres_password"
-export JWT_SECRET="your-secure-jwt-secret-key-at-least-32-characters"
-export JWT_EXPIRATION_MINUTES="60"
-```
-
-> **Generating a Secure JWT Secret:**
-> - Linux/macOS: `openssl rand -base64 32`
-> - Windows PowerShell: `[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 }))`
+*(On Linux / macOS, use standard `export VARIABLE="value"` syntax).*
 
 ---
 
 ## Running the Application
 
-Once environment variables are configured and PostgreSQL is running:
-
+### 1. Start the Spring Boot Backend
+From the project root:
 ```bash
 mvn spring-boot:run
 ```
+The backend initializes, runs `DatabaseSeeder`, and listens on **`http://localhost:8080`**.
 
-The application will start on port `8080` by default (`http://localhost:8080`).
-
-You can also package into an executable JAR:
+### 2. Start the React Frontend
+In a separate terminal, navigate to the `frontend/` directory, install dependencies, and launch Vite:
 ```bash
-mvn clean package
-java -jar target/codearena-0.0.1-SNAPSHOT.jar
+cd frontend
+npm install
+npm run dev
 ```
+Open **`http://localhost:5173`** in your browser. The Vite development server automatically proxies `/api` requests to `http://localhost:8080`.
+
+---
+
+## API Documentation & Swagger UI
+
+CodeArena provides interactive OpenAPI 3 documentation powered by SpringDoc:
+
+- **Swagger UI (Interactive Playground):** [`http://localhost:8080/swagger-ui/index.html`](http://localhost:8080/swagger-ui/index.html)
+- **Raw OpenAPI JSON Docs:** [`http://localhost:8080/v3/api-docs`](http://localhost:8080/v3/api-docs)
+
+### Authorizing in Swagger UI:
+1. Log in via `POST /api/auth/login` or register via `POST /api/auth/register`.
+2. Copy the `token` string from the JSON response.
+3. Click the green **Authorize** button at the top of Swagger UI.
+4. Paste the token into the value field and submit. All protected endpoints can now be executed directly from the browser!
+
+---
+
+## Database Seeding & Admin Bootstrap
+
+When `app.seed.enabled=true` (the default), `DatabaseSeeder` inspects the database on application startup. If the problem table is empty, it automatically seeds 10 algorithmic problems:
+
+| # | Problem Title | Difficulty | Algorithmic Category |
+| :-: | :--- | :--- | :--- |
+| 1 | **Two Sum** | `EASY` | Hash Maps / Arrays |
+| 2 | **Valid Palindrome** | `EASY` | Two Pointers / Strings |
+| 3 | **Longest Substring Without Repeating Characters** | `MEDIUM` | Sliding Window / Hash Set |
+| 4 | **Valid Parentheses** | `EASY` | Stack |
+| 5 | **Search in Rotated Sorted Array** | `MEDIUM` | Binary Search |
+| 6 | **Maximum Subarray (Kadane's Algorithm)** | `MEDIUM` | Dynamic Programming / Arrays |
+| 7 | **Container With Most Water** | `MEDIUM` | Two Pointers / Greedy |
+| 8 | **Merge Two Sorted Lists** | `EASY` | Linked Lists / Two Pointers |
+| 9 | **Subsets** | `MEDIUM` | Backtracking / Recursion |
+| 10 | **Climbing Stairs** | `EASY` | Dynamic Programming / Recursion |
+
+### Bootstrap Admin Account:
+To create an initial administrative user on launch, provide the three admin environment variables:
+```powershell
+$env:ADMIN_USERNAME="admin"
+$env:ADMIN_EMAIL="admin@codearena.com"
+$env:ADMIN_PASSWORD="AdminPassword123!"
+```
+If an account with that username already exists, the seeder safely skips creation.
 
 ---
 
 ## Running Automated Tests
 
-The test suite runs against an isolated in-memory **H2 database** (configured in `src/test/resources/application-test.properties`). No external PostgreSQL instance or environment variables are required to run tests.
+CodeArena includes comprehensive automated test suites for both backend and frontend.
+
+### Backend Tests (JUnit 5, Mockito, MockMvc)
+Backend integration tests run against an **isolated in-memory H2 database**. No PostgreSQL instance is required to run tests.
 
 Run all unit and integration tests:
 ```bash
 mvn test
 ```
 
-Run full build and verification:
+Run complete build verification:
 ```bash
 mvn clean verify
 ```
+*(All 54 tests pass with `BUILD SUCCESS` across security, controllers, services, repositories, and seeder).*
+
+### Frontend Tests (Vitest & React Testing Library)
+Navigate to the `frontend/` directory and run:
+```bash
+cd frontend
+npm test
+```
+
+Verify frontend production build and TypeScript compilation:
+```bash
+npm run build
+```
+*(All 17 tests pass with zero TypeScript errors).*
 
 ---
 
-## API Endpoints Reference
+## Current Limitations
 
-### Authentication (`/api/auth`)
+To maintain absolute transparency with recruiters and developers, here is what is intentionally **not** yet implemented in the current milestone:
 
-| Method | Endpoint | Access | Description |
-|--------|----------|--------|-------------|
-| `POST` | `/api/auth/register` | Public | Register a new user (`username`, `email`, `password`) |
-| `POST` | `/api/auth/login` | Public | Authenticate user and receive JWT Bearer token |
-| `GET` | `/api/auth/me` | Authenticated | Retrieve current user profile (`id`, `username`, `email`, `role`) |
-
-### Problems (`/api/problems`)
-
-| Method | Endpoint | Access | Description |
-|--------|----------|--------|-------------|
-| `GET` | `/api/problems` | Public | List problems with search, difficulty filter, pagination, and sorting |
-| `GET` | `/api/problems/{id}` | Public | Retrieve problem details by ID |
-| `POST` | `/api/problems` | Admin (`ROLE_ADMIN`) | Create a new coding problem with test cases/examples |
-| `PUT` | `/api/problems/{id}` | Admin (`ROLE_ADMIN`) | Update an existing coding problem |
-| `DELETE` | `/api/problems/{id}` | Admin (`ROLE_ADMIN`) | Delete a problem by ID |
-
-#### Query Parameters for `GET /api/problems`:
-- `search` (string, optional): Search by problem title or description substring.
-- `difficulty` (string, optional): `EASY`, `MEDIUM`, or `HARD`.
-- `page` (integer, default: 0): Page index.
-- `size` (integer, default: 10): Page size (max 100).
-- `sortBy` (string, default: `createdAt`): Sort field (`createdAt`, `difficulty`, `title`, `id`).
-- `sortDir` (string, default: `desc`): Sort direction (`asc` or `desc`).
-
-### Submissions (`/api/submissions`)
-
-| Method | Endpoint | Access | Description |
-|--------|----------|--------|-------------|
-| `POST` | `/api/submissions` | Authenticated | Submit code solution (`problemId`, `language`, `sourceCode`) |
-| `GET` | `/api/submissions/my` | Authenticated | Retrieve current user's submissions ordered by time |
-| `GET` | `/api/submissions/{id}` | Authenticated (Owner / Admin) | Retrieve a specific submission by ID |
+1. **Online Judge Code Execution:** Submitted code is validated and stored in PostgreSQL with `status = PENDING`. The application does not compile or run user code on the host machine. Running untrusted code on a host server poses severe security risks; execution is reserved for an isolated containerized worker service.
+2. **Asynchronous Message Queue:** Submissions are persisted directly in the relational database rather than published to a message broker (RabbitMQ / Kafka).
+3. **Real-time Live Verdicts:** The client does not use WebSockets for real-time status updates; submission receipts display the current persisted status.
+4. **Cloud / Infrastructure Orchestration:** The project currently runs in local development mode; Docker Compose, Kubernetes manifests, and cloud deployment pipelines are planned for Milestone 4.
 
 ---
 
-## Future Roadmap
+## Future Development Roadmap
 
-The following features are **planned** and will be introduced in subsequent phases:
-
-- [ ] **Sandboxed Code Execution Engine:** Isolated execution container (e.g., Docker / gVisor / Firecracker) to securely compile and execute user-submitted code within defined time and memory limits.
-- [ ] **Asynchronous Judging Queue:** Integration with a message broker (RabbitMQ / Apache Kafka / Redis Streams) to decouple submission ingestion from execution workers.
-- [ ] **Automated Test Evaluator:** Test runner comparing submission stdout against hidden test cases with verdicts (`ACCEPTED`, `WRONG_ANSWER`, `TIME_LIMIT_EXCEEDED`, `RUNTIME_ERROR`, etc.).
-- [ ] **Live Verdicts via WebSockets:** Real-time push updates to clients as submissions move through `IN_QUEUE`, `PROCESSING`, and final status.
-- [ ] **Contest & Leaderboard System:** Timed contest participation, score calculations, penalty times, and real-time rank tables.
-- [ ] **Containerization & CI/CD:** Official `Dockerfile`, `docker-compose.yml`, and GitHub Actions workflow for automated testing and builds.
+- [ ] **Milestone 3 — Sandboxed Code Execution Worker:**
+  - Decoupled worker service consuming submission tasks from a message queue (RabbitMQ / Redis Streams).
+  - Sandboxed compiler and runtime utilizing isolated Linux containers / microVMs (Docker / gVisor).
+  - Strict resource constraints (CPU execution limits, memory isolation, process count restrictions).
+  - Automated output verification comparing stdout against hidden test cases.
+- [ ] **Milestone 4 — Real-Time Verdicts & WebSockets:**
+  - WebSocket / SSE push notifications updating candidates from `PENDING` → `RUNNING` → `ACCEPTED` / `WRONG_ANSWER` / `TIME_LIMIT_EXCEEDED`.
+- [ ] **Milestone 5 — Contests, Leaderboards & Social:**
+  - Scheduled coding contests with live countdown timers and penalty point scoring.
+  - Global user leaderboards and rating progression.
+- [ ] **Milestone 6 — Production Containerization & CI/CD:**
+  - Multi-stage `Dockerfile` and `docker-compose.yml` for unified one-command local orchestration.
+  - GitHub Actions CI/CD workflow running automated unit and integration tests on pull requests.
 
 ---
 
-## Security & Contribution Guidelines
+## Contributing & Security
 
-- **Never commit `.env` or files containing plaintext credentials.**
-- Always verify changes against `mvn clean verify` before creating pull requests.
-- Use strong, randomly generated keys for production `JWT_SECRET`.
+1. **Security First:** Never commit `.env` files, production credentials, or real secret keys to source control.
+2. **Verification:** Always run `mvn clean verify` and `npm test` before submitting changes.
+3. **Code Style:** Keep backend controllers thin, encapsulate logic in services, and maintain DTO isolation.
 
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
