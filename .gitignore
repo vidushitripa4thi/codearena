@@ -1,0 +1,101 @@
+# ==============================================================================
+# CodeArena .gitignore
+# ==============================================================================
+
+# Compiled class files
+*.class
+
+# Maven build output
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Log files
+*.log
+*.log.*
+logs/
+
+# Package files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Environment files and credentials
+.env
+.env.*
+!.env.example
+*.env
+application-local.properties
+application-local.yml
+application-local.yaml
+application-secret.properties
+application-secret.yml
+application-secret.yaml
+
+# Security keys, certificates, and tokens
+*.pem
+*.key
+*.pkcs12
+*.pfx
+*.p12
+*.jks
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# Database files, local dumps, and backups
+*.sql
+*.dump
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE and Editor configurations
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.vscode/
+*.code-workspace
+.settings/
+.project
+.classpath
+.factorypath
+bin/
+.nb-gradle/
+.history/
+
+# Operating system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# Crash logs and temporary files
+hs_err_pid*
+replay_pid*
+*.tmp
+*.bak
+*.swp
+*~
+
+# Documents and Design Artifacts
+Executive Summary.pdf
+

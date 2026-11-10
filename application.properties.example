@@ -1,0 +1,29 @@
+spring.application.name=codearena
+
+# ==============================================================================
+# Database Configuration (PostgreSQL)
+# ==============================================================================
+# Set environment variables or configure these values:
+#   DB_URL (default: jdbc:postgresql://localhost:5432/codearena)
+#   DB_USERNAME (default: postgres)
+#   DB_PASSWORD (required - supply your PostgreSQL password)
+spring.datasource.url=${DB_URL:jdbc:postgresql://localhost:5432/codearena}
+spring.datasource.username=${DB_USERNAME:postgres}
+spring.datasource.password=${DB_PASSWORD:your_db_password_here}
+
+# ==============================================================================
+# JPA / Hibernate Configuration
+# ==============================================================================
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+
+# ==============================================================================
+# JWT Security Configuration
+# ==============================================================================
+# Supply a secure secret key of at least 32 characters (256 bits):
+#   JWT_SECRET (required)
+#   JWT_EXPIRATION_MINUTES (default: 60)
+app.jwt.secret=${JWT_SECRET:your_secure_random_jwt_secret_key_at_least_32_characters}
+app.jwt.expiration-minutes=${JWT_EXPIRATION_MINUTES:60}
+
