@@ -99,3 +99,8 @@ replay_pid*
 # Documents and Design Artifacts
 Executive Summary.pdf
 
+# Frontend Node & Build artifacts
+node_modules/
+dist/
+.eslintcache
+
