@@ -67,6 +67,30 @@ class SubmissionControllerTest {
 
     @Test
     @WithMockUser(username = "coder_john")
+    void runCodeReturnsOkStatus() throws Exception {
+        SubmissionDTO.CreateRequest request = new SubmissionDTO.CreateRequest();
+        request.setProblemId(1L);
+        request.setLanguage(Language.JAVA);
+        request.setSourceCode("public class Solution {}");
+
+        SubmissionDTO.ExecutionResponse response = new SubmissionDTO.ExecutionResponse(
+                SubmissionStatus.ACCEPTED, null, 25L, 2, 2, java.util.Collections.emptyList()
+        );
+
+        when(submissionService.runCode(any(SubmissionDTO.CreateRequest.class), eq("coder_john")))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/submissions/run")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACCEPTED"))
+                .andExpect(jsonPath("$.totalTestCases").value(2))
+                .andExpect(jsonPath("$.passedTestCases").value(2));
+    }
+
+    @Test
+    @WithMockUser(username = "coder_john")
     void getMySubmissionsReturnsList() throws Exception {
         SubmissionDTO.Response response = new SubmissionDTO.Response(
                 100L, 1L, "Two Sum", 1L, "coder_john",

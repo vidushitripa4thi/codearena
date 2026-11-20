@@ -1,0 +1,29 @@
+# ==============================================================================
+# DeployForge Frontend .dockerignore
+# ==============================================================================
+
+# Local node dependencies (installed freshly in container via npm ci)
+node_modules/
+.npm/
+
+# Local build artifacts
+dist/
+build/
+.eslintcache
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Git and IDE files
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.*
+!.env.example

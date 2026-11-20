@@ -1,8 +1,13 @@
 import { apiClient } from './client';
-import { CreateSubmissionRequest, SubmissionResponse } from '../types/submission';
+import { CreateSubmissionRequest, SubmissionResponse, ExecutionResponse } from '../types/submission';
 
 export async function createSubmission(request: CreateSubmissionRequest): Promise<SubmissionResponse> {
   const response = await apiClient.post<SubmissionResponse>('/submissions', request);
+  return response.data;
+}
+
+export async function runCode(request: CreateSubmissionRequest): Promise<ExecutionResponse> {
+  const response = await apiClient.post<ExecutionResponse>('/submissions/run', request);
   return response.data;
 }
 

@@ -8,7 +8,7 @@ import * as problemsApi from '../api/problems';
 import * as submissionsApi from '../api/submissions';
 import * as authApi from '../api/auth';
 import { Problem } from '../types/problem';
-import { SubmissionResponse } from '../types/submission';
+import { SubmissionResponse, ExecutionResponse } from '../types/submission';
 
 vi.mock('../api/problems', () => ({
   getProblemById: vi.fn(),
@@ -17,6 +17,7 @@ vi.mock('../api/problems', () => ({
 
 vi.mock('../api/submissions', () => ({
   createSubmission: vi.fn(),
+  runCode: vi.fn(),
   getMySubmissions: vi.fn(),
   getSubmissionById: vi.fn(),
 }));
@@ -181,6 +182,116 @@ describe('ProblemDetailPage Component Tests', () => {
       expect(screen.getByText('[0,1]')).toBeInTheDocument();
       expect(screen.getByText('nums = [3,2,4], target = 6')).toBeInTheDocument();
       expect(screen.getByText('[1,2]')).toBeInTheDocument();
+    });
+  });
+
+  it('executes Run Code when authenticated and displays sample execution results', async () => {
+    vi.mocked(problemsApi.getProblemById).mockResolvedValueOnce(sampleProblem);
+    vi.mocked(authApi.getProfile).mockResolvedValueOnce({
+      id: 5,
+      username: 'coder_alice',
+      email: 'alice@example.com',
+      role: 'USER',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+
+    localStorage.setItem('codearena_token', 'mock-token');
+
+    const mockRunResponse: ExecutionResponse = {
+      status: 'ACCEPTED',
+      compileError: null,
+      executionTimeMs: 145,
+      totalTestCases: 1,
+      passedTestCases: 1,
+      testCaseResults: [
+        {
+          caseNumber: 1,
+          input: '"race a car"',
+          expectedOutput: 'false',
+          actualOutput: 'false',
+          passed: true,
+          status: 'ACCEPTED',
+          executionTimeMs: 145,
+        },
+      ],
+    };
+
+    vi.mocked(submissionsApi.runCode).mockResolvedValueOnce(mockRunResponse);
+
+    render(
+      <MemoryRouter initialEntries={['/problems/42']}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/problems/:id" element={<ProblemDetailPage />} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /run code/i })).toBeInTheDocument();
+    });
+
+    const runBtn = screen.getByRole('button', { name: /run code/i });
+    await userEvent.click(runBtn);
+
+    await waitFor(() => {
+      expect(submissionsApi.runCode).toHaveBeenCalledWith(
+        expect.objectContaining({
+          problemId: 42,
+          language: 'JAVA',
+        })
+      );
+      expect(screen.getByText(/code execution result/i)).toBeInTheDocument();
+      expect(screen.getByText(/1 \/ 1/)).toBeInTheDocument();
+      expect(screen.getAllByText(/145 ms/).length).toBeGreaterThan(0);
+      expect(screen.getByText(/✓ passed/i)).toBeInTheDocument();
+    });
+  });
+
+  it('renders compilation error message when code has syntax errors', async () => {
+    vi.mocked(problemsApi.getProblemById).mockResolvedValueOnce(sampleProblem);
+    vi.mocked(authApi.getProfile).mockResolvedValueOnce({
+      id: 5,
+      username: 'coder_alice',
+      email: 'alice@example.com',
+      role: 'USER',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+
+    localStorage.setItem('codearena_token', 'mock-token');
+
+    const mockCompileErrorResponse: ExecutionResponse = {
+      status: 'COMPILATION_ERROR',
+      compileError: 'Solution.java:5: error: ";" expected\nreturn true',
+      executionTimeMs: null,
+      totalTestCases: 0,
+      passedTestCases: 0,
+      testCaseResults: [],
+    };
+
+    vi.mocked(submissionsApi.runCode).mockResolvedValueOnce(mockCompileErrorResponse);
+
+    render(
+      <MemoryRouter initialEntries={['/problems/42']}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/problems/:id" element={<ProblemDetailPage />} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /run code/i })).toBeInTheDocument();
+    });
+
+    const runBtn = screen.getByRole('button', { name: /run code/i });
+    await userEvent.click(runBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/compilation error/i)).toBeInTheDocument();
+      expect(screen.getByText(/error: ";" expected/i)).toBeInTheDocument();
     });
   });
 });

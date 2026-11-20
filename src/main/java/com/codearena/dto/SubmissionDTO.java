@@ -2,11 +2,13 @@ package com.codearena.dto;
 
 import com.codearena.entity.Language;
 import com.codearena.entity.SubmissionStatus;
+import com.codearena.service.execution.TestCaseResult;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.util.List;
 
 public class SubmissionDTO {
 
@@ -58,6 +60,10 @@ public class SubmissionDTO {
         private Integer executionTime;
         private Integer memoryUsed;
         private Instant submittedAt;
+        private String compileError;
+        private Integer totalTestCases;
+        private Integer passedTestCases;
+        private List<TestCaseResult> testCaseResults;
 
         public Response() {
         }
@@ -65,6 +71,15 @@ public class SubmissionDTO {
         public Response(Long id, Long problemId, String problemTitle, Long userId, String username,
                         Language language, SubmissionStatus status, String sourceCode,
                         Integer executionTime, Integer memoryUsed, Instant submittedAt) {
+            this(id, problemId, problemTitle, userId, username, language, status, sourceCode,
+                    executionTime, memoryUsed, submittedAt, null, null, null, null);
+        }
+
+        public Response(Long id, Long problemId, String problemTitle, Long userId, String username,
+                        Language language, SubmissionStatus status, String sourceCode,
+                        Integer executionTime, Integer memoryUsed, Instant submittedAt,
+                        String compileError, Integer totalTestCases, Integer passedTestCases,
+                        List<TestCaseResult> testCaseResults) {
             this.id = id;
             this.problemId = problemId;
             this.problemTitle = problemTitle;
@@ -76,6 +91,10 @@ public class SubmissionDTO {
             this.executionTime = executionTime;
             this.memoryUsed = memoryUsed;
             this.submittedAt = submittedAt;
+            this.compileError = compileError;
+            this.totalTestCases = totalTestCases;
+            this.passedTestCases = passedTestCases;
+            this.testCaseResults = testCaseResults;
         }
 
         public Long getId() {
@@ -164,6 +183,108 @@ public class SubmissionDTO {
 
         public void setSubmittedAt(Instant submittedAt) {
             this.submittedAt = submittedAt;
+        }
+
+        public String getCompileError() {
+            return compileError;
+        }
+
+        public void setCompileError(String compileError) {
+            this.compileError = compileError;
+        }
+
+        public Integer getTotalTestCases() {
+            return totalTestCases;
+        }
+
+        public void setTotalTestCases(Integer totalTestCases) {
+            this.totalTestCases = totalTestCases;
+        }
+
+        public Integer getPassedTestCases() {
+            return passedTestCases;
+        }
+
+        public void setPassedTestCases(Integer passedTestCases) {
+            this.passedTestCases = passedTestCases;
+        }
+
+        public List<TestCaseResult> getTestCaseResults() {
+            return testCaseResults;
+        }
+
+        public void setTestCaseResults(List<TestCaseResult> testCaseResults) {
+            this.testCaseResults = testCaseResults;
+        }
+    }
+
+    public static class ExecutionResponse {
+        private SubmissionStatus status;
+        private String compileError;
+        private Long executionTimeMs;
+        private Integer totalTestCases;
+        private Integer passedTestCases;
+        private List<TestCaseResult> testCaseResults;
+
+        public ExecutionResponse() {
+        }
+
+        public ExecutionResponse(SubmissionStatus status, String compileError, Long executionTimeMs,
+                                 Integer totalTestCases, Integer passedTestCases, List<TestCaseResult> testCaseResults) {
+            this.status = status;
+            this.compileError = compileError;
+            this.executionTimeMs = executionTimeMs;
+            this.totalTestCases = totalTestCases;
+            this.passedTestCases = passedTestCases;
+            this.testCaseResults = testCaseResults;
+        }
+
+        public SubmissionStatus getStatus() {
+            return status;
+        }
+
+        public void setStatus(SubmissionStatus status) {
+            this.status = status;
+        }
+
+        public String getCompileError() {
+            return compileError;
+        }
+
+        public void setCompileError(String compileError) {
+            this.compileError = compileError;
+        }
+
+        public Long getExecutionTimeMs() {
+            return executionTimeMs;
+        }
+
+        public void setExecutionTimeMs(Long executionTimeMs) {
+            this.executionTimeMs = executionTimeMs;
+        }
+
+        public Integer getTotalTestCases() {
+            return totalTestCases;
+        }
+
+        public void setTotalTestCases(Integer totalTestCases) {
+            this.totalTestCases = totalTestCases;
+        }
+
+        public Integer getPassedTestCases() {
+            return passedTestCases;
+        }
+
+        public void setPassedTestCases(Integer passedTestCases) {
+            this.passedTestCases = passedTestCases;
+        }
+
+        public List<TestCaseResult> getTestCaseResults() {
+            return testCaseResults;
+        }
+
+        public void setTestCaseResults(List<TestCaseResult> testCaseResults) {
+            this.testCaseResults = testCaseResults;
         }
     }
 }

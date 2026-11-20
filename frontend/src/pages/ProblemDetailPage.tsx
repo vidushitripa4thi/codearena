@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getProblemById } from '../api/problems';
-import { createSubmission } from '../api/submissions';
+import { createSubmission, runCode } from '../api/submissions';
 import { Problem } from '../types/problem';
-import { Language, SubmissionResponse } from '../types/submission';
+import { Language, SubmissionResponse, ExecutionResponse } from '../types/submission';
 import { extractErrorMessage } from '../api/client';
 import { CodeEditor, STARTER_TEMPLATES } from '../components/problem/CodeEditor';
 import { DifficultyBadge, StatusBadge, LanguageBadge } from '../components/common/Badge';
@@ -16,9 +16,13 @@ import {
   Clock,
   HardDrive,
   Send,
+  Play,
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Terminal,
   Info,
   LogIn,
 } from 'lucide-react';
@@ -34,8 +38,12 @@ export const ProblemDetailPage: React.FC = () => {
   const [language, setLanguage] = useState<Language>('JAVA');
   const [code, setCode] = useState<string>(STARTER_TEMPLATES.JAVA);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isRunning, setIsRunning] = useState<boolean>(false);
   const [submissionResult, setSubmissionResult] = useState<SubmissionResponse | null>(null);
-  const [submitError, setSubmitError] = useState<string>('');
+  const [runResult, setRunResult] = useState<ExecutionResponse | null>(null);
+  const [activeTab, setActiveTab] = useState<'run' | 'submission'>('run');
+  const [selectedCaseTab, setSelectedCaseTab] = useState<number>(0);
+  const [actionError, setActionError] = useState<string>('');
 
   useEffect(() => {
     let isMounted = true;
@@ -71,17 +79,44 @@ export const ProblemDetailPage: React.FC = () => {
     };
   }, [id]);
 
+  const handleRunCode = async () => {
+    if (!problem) return;
+    if (!code.trim()) {
+      setActionError('Source code cannot be blank.');
+      return;
+    }
+
+    try {
+      setIsRunning(true);
+      setActionError('');
+      setSelectedCaseTab(0);
+
+      const res = await runCode({
+        problemId: problem.id,
+        language,
+        sourceCode: code,
+      });
+
+      setRunResult(res);
+      setActiveTab('run');
+    } catch (err) {
+      setActionError(extractErrorMessage(err));
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!problem) return;
     if (!code.trim()) {
-      setSubmitError('Source code cannot be blank.');
+      setActionError('Source code cannot be blank.');
       return;
     }
 
     try {
       setIsSubmitting(true);
-      setSubmitError('');
-      setSubmissionResult(null);
+      setActionError('');
+      setSelectedCaseTab(0);
 
       const res = await createSubmission({
         problemId: problem.id,
@@ -90,8 +125,9 @@ export const ProblemDetailPage: React.FC = () => {
       });
 
       setSubmissionResult(res);
+      setActiveTab('submission');
     } catch (err) {
-      setSubmitError(extractErrorMessage(err));
+      setActionError(extractErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -256,15 +292,28 @@ export const ProblemDetailPage: React.FC = () => {
             </div>
 
             {isAuthenticated ? (
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleSubmit}
-                isLoading={isSubmitting}
-                rightIcon={<Send className="w-4 h-4" />}
-              >
-                Submit Solution
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={handleRunCode}
+                  isLoading={isRunning}
+                  disabled={isSubmitting}
+                  leftIcon={<Play className="w-4 h-4 text-emerald-400" />}
+                >
+                  Run Code
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={handleSubmit}
+                  isLoading={isSubmitting}
+                  disabled={isRunning}
+                  rightIcon={<Send className="w-4 h-4" />}
+                >
+                  Submit Solution
+                </Button>
+              </div>
             ) : (
               <Link to={`/login?redirect=/problems/${problem.id}`}>
                 <Button variant="secondary" size="md" leftIcon={<LogIn className="w-4 h-4" />}>
@@ -274,68 +323,274 @@ export const ProblemDetailPage: React.FC = () => {
             )}
           </div>
 
-          {/* Submit error */}
-          {submitError && (
-            <ErrorAlert message={submitError} onDismiss={() => setSubmitError('')} />
+          {/* Action error */}
+          {actionError && (
+            <ErrorAlert message={actionError} onDismiss={() => setActionError('')} />
           )}
 
-          {/* Submission Result / Status Panel */}
-          {submissionResult && (
-            <Card className="p-5 border-emerald-500/30 bg-arena-900/90 space-y-4 shadow-xl">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                    <CheckCircle2 className="w-4 h-4" />
+          {/* Code Execution / Submission Result Panel */}
+          {(runResult || submissionResult) && (() => {
+            const isRun = activeTab === 'run' && runResult !== null;
+            const activeResult = isRun ? runResult : (submissionResult || runResult)!;
+            const currentTab = isRun ? 'run' : 'submission';
+            const testCaseResults = activeResult?.testCaseResults || [];
+            const compileError = activeResult?.compileError;
+            const status = activeResult?.status;
+            const totalTestCases = activeResult?.totalTestCases ?? testCaseResults.length;
+            const passedTestCases = activeResult?.passedTestCases ?? testCaseResults.filter((t) => t.passed).length;
+            const executionTime = isRun
+              ? runResult?.executionTimeMs
+              : (submissionResult?.executionTime ?? null);
+
+            const currentCase = testCaseResults[selectedCaseTab] || testCaseResults[0];
+
+            return (
+              <Card className="p-5 border-arena-700 bg-arena-900/95 space-y-5 shadow-2xl">
+                {/* Result Mode Switcher (if both Run and Submission exist) */}
+                {runResult && submissionResult && (
+                  <div className="flex items-center gap-2 border-b border-arena-800 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('run');
+                        setSelectedCaseTab(0);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        activeTab === 'run'
+                          ? 'bg-arena-800 text-white border border-arena-600'
+                          : 'text-arena-400 hover:text-white'
+                      }`}
+                    >
+                      Run Output
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('submission');
+                        setSelectedCaseTab(0);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        activeTab === 'submission'
+                          ? 'bg-arena-800 text-white border border-arena-600'
+                          : 'text-arena-400 hover:text-white'
+                      }`}
+                    >
+                      Submission #{submissionResult.id}
+                    </button>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-white">
-                      Submission Recorded Successfully
-                    </h4>
-                    <span className="text-xs font-mono text-arena-400">
-                      Submission ID: #{submissionResult.id}
-                    </span>
+                )}
+
+                {/* Header */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center border ${
+                        status === 'ACCEPTED'
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                          : status === 'WRONG_ANSWER'
+                          ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+                          : status === 'COMPILATION_ERROR'
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                          : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                      }`}
+                    >
+                      {status === 'ACCEPTED' ? (
+                        <CheckCircle2 className="w-5 h-5" />
+                      ) : status === 'WRONG_ANSWER' ? (
+                        <XCircle className="w-5 h-5" />
+                      ) : status === 'COMPILATION_ERROR' ? (
+                        <Terminal className="w-5 h-5" />
+                      ) : (
+                        <AlertCircle className="w-5 h-5" />
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">
+                        {currentTab === 'submission'
+                          ? 'Submission Recorded Successfully'
+                          : 'Code Execution Result'}
+                      </h4>
+                      <span className="text-xs font-mono text-arena-400">
+                        {currentTab === 'submission' && submissionResult
+                          ? `Submission ID: #${submissionResult.id}`
+                          : 'Evaluated against sample test cases'}
+                      </span>
+                    </div>
                   </div>
+
+                  <StatusBadge status={status} />
                 </div>
 
-                <StatusBadge status={submissionResult.status} />
-              </div>
+                {/* Status explanation notice if PENDING */}
+                {status === 'PENDING' && (
+                  <div className="flex items-start gap-2.5 p-3 rounded-lg bg-arena-950 border border-arena-800 text-xs text-arena-400">
+                    <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="leading-relaxed">
+                      <strong className="text-amber-300">Status is {status}:</strong> Your solution
+                      was ingested and persisted in PostgreSQL. CodeArena's sandboxed test evaluation runner is
+                      currently in development or no test cases are configured.
+                    </div>
+                  </div>
+                )}
 
-              {/* Status explanation notice */}
-              <div className="flex items-start gap-2.5 p-3 rounded-lg bg-arena-950 border border-arena-800 text-xs text-arena-400">
-                <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  <strong className="text-amber-300">Status is {submissionResult.status}:</strong> Your solution
-                  was ingested and persisted in PostgreSQL. CodeArena's sandboxed test evaluation runner is
-                  currently in development, so solutions remain in queued/pending state without automated execution.
-                </div>
-              </div>
+                {/* Metrics Summary Bar */}
+                {status !== 'COMPILATION_ERROR' && totalTestCases > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-mono">
+                    <div className="p-3 rounded-lg bg-arena-950 border border-arena-800">
+                      <span className="text-arena-500 block text-[10px] uppercase">Test Cases Passed</span>
+                      <span className={`text-sm font-bold mt-0.5 block ${passedTestCases === totalTestCases ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {passedTestCases} / {totalTestCases}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-lg bg-arena-950 border border-arena-800">
+                      <span className="text-arena-500 block text-[10px] uppercase">Execution Time</span>
+                      <span className="text-sm font-bold text-white mt-0.5 block">
+                        {executionTime != null ? `${executionTime} ms` : '—'}
+                      </span>
+                    </div>
+                    {currentTab === 'submission' && submissionResult?.memoryUsed != null && (
+                      <div className="p-3 rounded-lg bg-arena-950 border border-arena-800">
+                        <span className="text-arena-500 block text-[10px] uppercase">Memory Used</span>
+                        <span className="text-sm font-bold text-white mt-0.5 block">
+                          {submissionResult.memoryUsed} KB
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1 font-mono">
-                <div className="p-2.5 rounded-lg bg-arena-950 border border-arena-800">
-                  <span className="text-arena-500 block text-[10px]">Language</span>
-                  <LanguageBadge language={submissionResult.language} size="sm" className="mt-1" />
-                </div>
-                <div className="p-2.5 rounded-lg bg-arena-950 border border-arena-800">
-                  <span className="text-arena-500 block text-[10px]">Submitted By</span>
-                  <span className="text-white font-medium mt-1 block">{submissionResult.username}</span>
-                </div>
-                <div className="p-2.5 rounded-lg bg-arena-950 border border-arena-800">
-                  <span className="text-arena-500 block text-[10px]">Timestamp</span>
-                  <span className="text-arena-300 mt-1 block truncate">
-                    {new Date(submissionResult.submittedAt).toLocaleTimeString()}
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-lg bg-arena-950 border border-arena-800 flex items-center justify-center">
-                  <Link
-                    to="/submissions"
-                    className="text-emerald-400 hover:text-emerald-300 text-xs font-sans font-medium"
-                  >
-                    View All Submissions &rarr;
-                  </Link>
-                </div>
-              </div>
-            </Card>
-          )}
+                {/* Compilation Error Display */}
+                {compileError && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-400 uppercase tracking-wider font-mono">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>Compilation Error</span>
+                    </div>
+                    <pre className="p-3.5 bg-arena-950 text-rose-300 font-mono text-xs rounded-lg overflow-x-auto whitespace-pre-wrap border border-rose-500/30 leading-relaxed">
+                      {compileError}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Test Cases Results Detail */}
+                {testCaseResults.length > 0 && (
+                  <div className="space-y-3 pt-2 border-t border-arena-800">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs uppercase font-mono tracking-wider text-arena-400 font-semibold">
+                        Test Results
+                      </span>
+                      <span className="text-xs text-arena-500 font-mono">
+                        {passedTestCases} of {totalTestCases} passed
+                      </span>
+                    </div>
+
+                    {/* Test Case Tabs */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      {testCaseResults.map((tc, idx) => {
+                        const isSelected = selectedCaseTab === idx;
+                        return (
+                          <button
+                            key={tc.caseNumber || idx}
+                            type="button"
+                            onClick={() => setSelectedCaseTab(idx)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all border ${
+                              isSelected
+                                ? 'bg-arena-800 text-white border-arena-600 shadow-sm'
+                                : 'bg-arena-950 text-arena-400 hover:text-white border-arena-800/80'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                tc.passed ? 'bg-emerald-400' : 'bg-rose-400'
+                              }`}
+                            />
+                            <span>Case {idx + 1}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Active Test Case Detail View */}
+                    {currentCase && (
+                      <div className="p-4 rounded-lg bg-arena-950 border border-arena-800 space-y-3 text-xs font-mono">
+                        <div className="flex items-center justify-between pb-2 border-b border-arena-800/80">
+                          <span className={`font-semibold ${currentCase.passed ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {currentCase.passed ? '✓ Passed' : '✗ Failed'}
+                          </span>
+                          {currentCase.executionTimeMs != null && (
+                            <span className="text-arena-400 text-[11px]">
+                              {currentCase.executionTimeMs} ms
+                            </span>
+                          )}
+                        </div>
+
+                        {currentCase.errorMessage && (
+                          <div className="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
+                            {currentCase.errorMessage}
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                          <span className="text-arena-500 text-[11px] block">Input:</span>
+                          <pre className="p-2.5 rounded bg-arena-900 border border-arena-800 text-arena-200 overflow-x-auto whitespace-pre-wrap">
+                            {currentCase.input}
+                          </pre>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-arena-500 text-[11px] block">Expected Output:</span>
+                          <pre className="p-2.5 rounded bg-arena-900 border border-arena-800 text-emerald-400 overflow-x-auto whitespace-pre-wrap">
+                            {currentCase.expectedOutput}
+                          </pre>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-arena-500 text-[11px] block">Your Output:</span>
+                          <pre
+                            className={`p-2.5 rounded bg-arena-900 border overflow-x-auto whitespace-pre-wrap ${
+                              currentCase.passed
+                                ? 'border-emerald-500/30 text-emerald-300'
+                                : 'border-rose-500/30 text-rose-300'
+                            }`}
+                          >
+                            {currentCase.actualOutput || '(No output)'}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Submission Meta Details (if submission view) */}
+                {currentTab === 'submission' && submissionResult && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1 font-mono">
+                    <div className="p-2.5 rounded-lg bg-arena-950 border border-arena-800">
+                      <span className="text-arena-500 block text-[10px]">Language</span>
+                      <LanguageBadge language={submissionResult.language} size="sm" className="mt-1" />
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-arena-950 border border-arena-800">
+                      <span className="text-arena-500 block text-[10px]">Submitted By</span>
+                      <span className="text-white font-medium mt-1 block">{submissionResult.username}</span>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-arena-950 border border-arena-800">
+                      <span className="text-arena-500 block text-[10px]">Timestamp</span>
+                      <span className="text-arena-300 mt-1 block truncate">
+                        {new Date(submissionResult.submittedAt).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-arena-950 border border-arena-800 flex items-center justify-center">
+                      <Link
+                        to="/submissions"
+                        className="text-emerald-400 hover:text-emerald-300 text-xs font-sans font-medium"
+                      >
+                        View All Submissions &rarr;
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            );
+          })()}
         </div>
       </div>
     </div>

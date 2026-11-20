@@ -27,6 +27,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,11 +43,14 @@ class SubmissionServiceImplTest {
     @Mock
     private ProblemRepository problemRepository;
 
+    @Mock
+    private com.codearena.service.execution.CodeExecutionService codeExecutionService;
+
     private SubmissionServiceImpl submissionService;
 
     @BeforeEach
     void setUp() {
-        submissionService = new SubmissionServiceImpl(submissionRepository, userRepository, problemRepository);
+        submissionService = new SubmissionServiceImpl(submissionRepository, userRepository, problemRepository, codeExecutionService);
     }
 
     @Test
@@ -58,6 +62,11 @@ class SubmissionServiceImplTest {
         Problem problem = new Problem();
         problem.setId(10L);
         problem.setTitle("Two Sum");
+        com.codearena.entity.TestCase tc = new com.codearena.entity.TestCase();
+        tc.setId(1L);
+        tc.setInput("nums = [2,7,11,15], target = 9");
+        tc.setExpectedOutput("[0,1]");
+        problem.addTestCase(tc);
 
         when(userRepository.findByUsername("coder_john")).thenReturn(Optional.of(user));
         when(problemRepository.findById(10L)).thenReturn(Optional.of(problem));
@@ -66,6 +75,11 @@ class SubmissionServiceImplTest {
             s.setId(100L);
             return s;
         });
+
+        com.codearena.service.execution.ExecutionResult execRes = new com.codearena.service.execution.ExecutionResult();
+        execRes.setStatus(SubmissionStatus.ACCEPTED);
+        execRes.setExecutionTimeMs(45L);
+        when(codeExecutionService.execute(any(), any(), any(), anyInt(), anyInt())).thenReturn(execRes);
 
         SubmissionDTO.CreateRequest request = new SubmissionDTO.CreateRequest();
         request.setProblemId(10L);
@@ -78,13 +92,48 @@ class SubmissionServiceImplTest {
         assertThat(response.getProblemId()).isEqualTo(10L);
         assertThat(response.getProblemTitle()).isEqualTo("Two Sum");
         assertThat(response.getUsername()).isEqualTo("coder_john");
-        assertThat(response.getStatus()).isEqualTo(SubmissionStatus.PENDING);
+        assertThat(response.getStatus()).isEqualTo(SubmissionStatus.ACCEPTED);
         assertThat(response.getLanguage()).isEqualTo(Language.JAVA);
         assertThat(response.getSourceCode()).isEqualTo("public class Solution {}");
+    }
 
-        ArgumentCaptor<Submission> captor = ArgumentCaptor.forClass(Submission.class);
-        verify(submissionRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(SubmissionStatus.PENDING);
+    @Test
+    void runCodeEvaluatesAgainstExamples() {
+        Problem problem = new Problem();
+        problem.setId(10L);
+        problem.setTitle("Two Sum");
+        com.codearena.entity.TestCase tc = new com.codearena.entity.TestCase();
+        tc.setId(1L);
+        tc.setInput("nums = [2,7,11,15], target = 9");
+        tc.setExpectedOutput("[0,1]");
+        problem.addTestCase(tc);
+
+        com.codearena.entity.Example ex = new com.codearena.entity.Example();
+        ex.setId(1L);
+        ex.setInput("nums = [2,7,11,15], target = 9");
+        ex.setOutput("[0,1]");
+        problem.addExample(ex);
+
+        when(problemRepository.findById(10L)).thenReturn(Optional.of(problem));
+
+        com.codearena.service.execution.ExecutionResult execRes = new com.codearena.service.execution.ExecutionResult();
+        execRes.setStatus(SubmissionStatus.ACCEPTED);
+        execRes.setExecutionTimeMs(30L);
+        execRes.setTotalTestCases(1);
+        execRes.setPassedTestCases(1);
+        when(codeExecutionService.execute(any(), any(), any(), anyInt(), anyInt())).thenReturn(execRes);
+
+        SubmissionDTO.CreateRequest request = new SubmissionDTO.CreateRequest();
+        request.setProblemId(10L);
+        request.setLanguage(Language.JAVA);
+        request.setSourceCode("public class Solution {}");
+
+        SubmissionDTO.ExecutionResponse response = submissionService.runCode(request, "coder_john");
+
+        assertThat(response.getStatus()).isEqualTo(SubmissionStatus.ACCEPTED);
+        assertThat(response.getExecutionTimeMs()).isEqualTo(30L);
+        assertThat(response.getTotalTestCases()).isEqualTo(1);
+        assertThat(response.getPassedTestCases()).isEqualTo(1);
     }
 
     @Test
@@ -113,6 +162,11 @@ class SubmissionServiceImplTest {
         Problem problem = new Problem();
         problem.setId(10L);
         problem.setTitle("Two Sum");
+        com.codearena.entity.TestCase tc = new com.codearena.entity.TestCase();
+        tc.setId(1L);
+        tc.setInput("nums = [2,7,11,15], target = 9");
+        tc.setExpectedOutput("[0,1]");
+        problem.addTestCase(tc);
 
         Submission submission = new Submission();
         submission.setId(100L);
@@ -143,6 +197,11 @@ class SubmissionServiceImplTest {
         Problem problem = new Problem();
         problem.setId(10L);
         problem.setTitle("Two Sum");
+        com.codearena.entity.TestCase tc = new com.codearena.entity.TestCase();
+        tc.setId(1L);
+        tc.setInput("nums = [2,7,11,15], target = 9");
+        tc.setExpectedOutput("[0,1]");
+        problem.addTestCase(tc);
 
         Submission submission = new Submission();
         submission.setId(100L);
@@ -176,6 +235,11 @@ class SubmissionServiceImplTest {
         Problem problem = new Problem();
         problem.setId(10L);
         problem.setTitle("Two Sum");
+        com.codearena.entity.TestCase tc = new com.codearena.entity.TestCase();
+        tc.setId(1L);
+        tc.setInput("nums = [2,7,11,15], target = 9");
+        tc.setExpectedOutput("[0,1]");
+        problem.addTestCase(tc);
 
         Submission submission = new Submission();
         submission.setId(100L);
@@ -209,6 +273,11 @@ class SubmissionServiceImplTest {
         Problem problem = new Problem();
         problem.setId(10L);
         problem.setTitle("Two Sum");
+        com.codearena.entity.TestCase tc = new com.codearena.entity.TestCase();
+        tc.setId(1L);
+        tc.setInput("nums = [2,7,11,15], target = 9");
+        tc.setExpectedOutput("[0,1]");
+        problem.addTestCase(tc);
 
         Submission submission = new Submission();
         submission.setId(100L);

@@ -217,40 +217,92 @@ sequenceDiagram
 
 ---
 
-## 4. Current Implemented Scope vs. Planned Execution Engine
+## 4. Sandboxed Code Execution & Judging Engine Architecture
 
-It is essential to understand the boundary between what is currently implemented in CodeArena and the planned future phases:
+CodeArena features a secure, automated code execution and judging engine designed for Java 17 solutions.
 
-### Currently Implemented
-- **Submission Intake & Persistence:** Submissions are validated, stored in PostgreSQL, associated with the submitting user and problem, and given the initial state `PENDING`.
-- **Ownership Security:** Users can only retrieve their own submissions; administrators can audit all submissions.
-- **Problem Test Case Data:** Test cases (both sample and hidden) are modeled, seeded, and securely stored in PostgreSQL.
+### 4.1 Architecture & Dual-Execution Model
 
-### Planned Worker Execution Engine
-The current milestone intentionally does not execute submitted code. In a production judge platform, running untrusted user code directly on the application server is a critical security vulnerability. 
+Code execution is decoupled from the main application thread and supports two runtime modes:
 
-The planned architecture for Milestone 3 decouples execution into an isolated asynchronous pipeline:
+1. **Docker Container Sandbox (Host Runner Mode):**
+   - Automatically detected when the host machine running Spring Boot has direct access to the Docker daemon and the sandbox runner image (`eclipse-temurin:17-alpine`) is pre-pulled.
+   - Spawns an ephemeral Docker container (`docker run --rm`) per execution run.
+   - **Network Isolation:** `--network none` isolates the execution container from local networks, the internet, and internal services.
+   - **Resource Quotas:** Constrained by cgroups (`--cpus 1.0`, `--memory 256m`) and JVM heap parameters (`-Xmx`).
+   - **Filesystem Isolation:** Mounts exclusively an ephemeral, randomly generated temporary directory (`-v <tempDir>:/sandbox -w /sandbox`).
+   - **Credential & Secret Protection:** Zero host environment variables or credentials (`DB_PASSWORD`, `JWT_SECRET`) are shared into the execution container.
+
+2. **Process Sandbox Fallback (Docker Compose & CI Mode):**
+   - Active when running inside the Docker Compose deployment (`deployforge-backend`), CI pipelines, or minimal development environments.
+   - **Why in Docker Compose?** In the production Compose stack, the backend container intentionally does **not** have the host Docker socket (`/var/run/docker.sock`) mounted, nor does it have the Docker CLI installed or run in privileged mode (`no-new-privileges:true`, unprivileged UID 1001). This security design prevents dangerous Docker-out-of-Docker container breakout attacks from the web tier.
+   - Consequently, in Docker deployment, submissions execute as child processes (`java -Xmx<mem>m Solution`) of the Spring Boot application.
+   - Uses Java `ProcessBuilder` with an explicit `pb.environment().clear()`, stripping all environment variables, system properties, and database credentials (verified: `DB_PASSWORD` and `JWT_SECRET` are not accessible).
+   - Enforces execution timeouts via asynchronous thread polling (`process.waitFor(timeout, TimeUnit.SECONDS)`) and terminates timed-out executions with `process.destroyForcibly()`.
+   - Constrains heap memory allocation via `-Xmx` JVM flags.
 
 ```mermaid
-flowchart LR
-    subgraph CurrentScope["Currently Implemented"]
-        WebClient["Web Client"] -->|"POST /api/submissions"| API["Spring Boot REST API"]
-        API -->|"Persist (status=PENDING)"| DB[("PostgreSQL")]
+flowchart TD
+    Client["Client / Monaco Editor"] -->|"Run Code: POST /api/submissions/run<br/>Submit: POST /api/submissions"| API["SubmissionController"]
+    API -->|"Validate Token & Ownership"| Service["SubmissionService"]
+
+    subgraph Engine["CodeExecutionService (Sandboxed Execution Engine)"]
+        SecCheck["Static Security Filter<br/>(Rejects System.exit, ProcessBuilder, Runtime, Sockets)"]
+        PreProc["Source Code Preprocessor<br/>(Extracts / Synthesizes driver main harness)"]
+        Sanitize["Input Token Sanitizer<br/>(Transforms 'n = 3' -> clean numeric / string stream)"]
+
+        SecCheck -->|"Pass"| PreProc --> Sanitize
+        SecCheck -->|"Violation"| FastFail["COMPILATION_ERROR<br/>Security Policy Violation"]
+
+        Sanitize --> ModeSelect{"Docker & Image<br/>Available?"}
+
+        ModeSelect -->|"Yes"| DockerRun["Docker Sandbox Container<br/>(docker run --rm --network none --cpus 1.0 -m 256m)"]
+        ModeSelect -->|"No"| ProcRun["Process Sandbox Fallback<br/>(ProcessBuilder with environment().clear())"]
+
+        DockerRun --> Compare["OutputComparator<br/>(Whitespace, Bracket, Multi-set Normalization)"]
+        ProcRun --> Compare
     end
 
-    subgraph PlannedScope["Planned Execution Engine (Milestone 3)"]
-        API -.->|"Publish submission job"| Broker["Message Broker<br/>(RabbitMQ / Redis Streams)"]
-        Broker -.->|"Consume job"| Worker["Isolated Execution Worker"]
-        Worker -.->|"Compile & Run inside sandbox"| Sandbox["Container / MicroVM Sandbox<br/>(Docker / gVisor / Firecracker)"]
-        Sandbox -.->|"Execution metrics & stdout"| Worker
-        Worker -.->|"Update status (ACCEPTED, WA, TLE)"| DB
-        Worker -.->|"Push live verdict"| WebSocket["WebSocket / SSE Service"]
-        WebSocket -.->|"Live verdict update"| WebClient
-    end
-
-    classDef planned fill:#f9f0ff,stroke:#8b5cf6,stroke-width:2px,stroke-dasharray: 5 5;
-    class Broker,Worker,Sandbox,WebSocket planned;
+    Service --> SecCheck
+    Compare -->|"Verdict & Metrics"| Service
+    Service -->|"If Submit: Save to DB"| DB[("PostgreSQL")]
+    Service -->|"ExecutionResponse / SubmissionResponse"| API
+    API -->|"JSON with testCaseResults & status"| Client
 ```
+
+### 4.2 Static Security Policy & Threat Mitigation
+
+To prevent denial-of-service, process escalation, and environment tampering across both execution modes, `CodeExecutionService` inspects the abstract syntax and tokens before compilation:
+
+| Restricted Operation / Pattern | Threat Prevented | Verdict Returned |
+| :--- | :--- | :--- |
+| `System.exit()` | Terminating runner JVM processes | `COMPILATION_ERROR` (Security Violation) |
+| `Runtime.getRuntime().exec()` | Spawning arbitrary host shell binaries | `COMPILATION_ERROR` (Security Violation) |
+| `ProcessBuilder` | Forking unauthorized host processes | `COMPILATION_ERROR` (Security Violation) |
+| `java.lang.reflect.*` | Bypassing JVM access boundaries | `COMPILATION_ERROR` (Security Violation) |
+| `java.net.Socket`, `ServerSocket`, `HttpURLConnection` | Network port scanning, SSRF, data exfiltration | `COMPILATION_ERROR` (Security Violation) |
+
+### 4.3 Output Comparison & Normalization Algorithm (`OutputComparator`)
+
+Coding platform test cases frequently involve array formatting, boolean representations, and combinatorial outputs. `OutputComparator` implements:
+
+1. **Newline & Whitespace Normalization:** Normalizes carriage returns (`\r\n` $\rightarrow$ `\n`), collapses redundant spaces, and trims leading/trailing whitespace.
+2. **Boolean & Numeric Equivalence:** Case-insensitive boolean evaluation (`True` vs `true`) and numerical format matching (`42.0` vs `42`).
+3. **List & JSON Array Matching:** Evaluates standard Java list representations (`[((())), (()())]`) against JSON string format arrays (`["((()))","(()())"]`), normalizing internal string quotes and bracket whitespace.
+4. **Order-Independent Set Permutation:** Handles combinatorial problems (e.g., *Generate Parentheses*) where elements may be emitted in any valid order without failing the judge.
+
+### 4.4 Known Security Limitations & Production Hardening Roadmap
+
+While DeployForge and CodeArena implement defense-in-depth isolation, academic transparency requires acknowledging the following production boundaries:
+
+1. **Academic Demonstration vs. Adversarial Multi-Tenant Sandbox:**
+   - **Regex Filter Boundaries:** Static regex pattern filtering (`validateSecurityPolicy`) is a lightweight defense-in-depth heuristic designed to block naive exploits (`System.exit`, `ProcessBuilder`, `Socket`). It is **not** an impenetrable security boundary and can be bypassed via dynamic reflection, string concatenation, or alternate I/O classes (`java.io.File`, `java.io.FileReader`).
+   - **Process Sandbox Boundaries:** In Docker Compose deployment, the child process (`java -Xmx...m Solution`) runs inside the backend container without a custom Linux seccomp profile, chroot jail, or separate network namespace. While `environment().clear()` successfully strips database credentials (`DB_PASSWORD`, `JWT_SECRET`), the child process shares the container network namespace and can read world-readable container files (`/app/app.jar`, `/etc/passwd`).
+   - **Project Scope:** CodeArena + DeployForge is designed and implemented as an **academic demonstration of full-stack software architecture, CI/CD pipelines, container orchestration, and judge workflow design**, rather than an adversarial-grade production judge platform (such as LeetCode or Codeforces, which employ microVMs like Firecracker, gVisor, or dedicated nsjail runners).
+
+2. **Synchronous Judging Model:** Current executions run synchronously per request. For enterprise scale (thousands of concurrent submissions), execution should be offloaded to an asynchronous message queue (e.g., RabbitMQ or Redis Streams) with worker pools.
+
+3. **Compiler Resource Consumption:** Java compilation (`javac`) currently occurs on the runner. Future iterations should enforce memory and CPU limits directly on `javac` to prevent deeply nested generic or annotation-processor compilation bombs.
 
 ---
 
@@ -258,5 +310,5 @@ flowchart LR
 
 1. **Database Secrets:** Never hardcode database credentials. CodeArena reads `DB_PASSWORD` and `JWT_SECRET` from environment variables with fallback to empty strings.
 2. **Stateless Security:** Disabling HTTP sessions ensures scalability and prevents session fixation attacks.
-3. **CORS:** Restricted to trusted local development origins (`http://localhost:5173`, `http://localhost:3000`).
+3. **CORS:** Restricted to trusted local development origins (`http://localhost:5173`, `http://localhost:3000`, `http://localhost`).
 4. **Data Isolation:** Automated tests execute against an isolated in-memory H2 database with dynamic `create-drop` schema recreation, ensuring no test data pollutes PostgreSQL.

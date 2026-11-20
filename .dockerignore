@@ -1,0 +1,42 @@
+# ==============================================================================
+# DeployForge Root .dockerignore
+# Excludes unnecessary files and host artifacts from backend Docker build context
+# ==============================================================================
+
+# Version control
+.git/
+.gitignore
+
+# CI/CD and Documentation
+.github/
+docs/
+*.md
+*.pdf
+
+# Local Maven build outputs
+target/
+*.class
+
+# Frontend workspace (built in separate frontend Dockerfile)
+frontend/
+
+# Local IDE and editor configurations
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.settings/
+.project
+.classpath
+
+# Logs and temporary files
+*.log
+logs/
+*.tmp
+*.bak
+
+# Environment credential files (never pass host secrets into image)
+.env
+.env.*
+!.env.example

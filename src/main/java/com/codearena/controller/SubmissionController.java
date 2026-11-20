@@ -38,6 +38,18 @@ public class SubmissionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @PostMapping("/run")
+    public ResponseEntity<SubmissionDTO.ExecutionResponse> runCode(
+            @Valid @RequestBody SubmissionDTO.CreateRequest request,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        if (userDetails == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        SubmissionDTO.ExecutionResponse response = submissionService.runCode(request, userDetails.getUsername());
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/my")
     public ResponseEntity<List<SubmissionDTO.Response>> getMySubmissions(
             @AuthenticationPrincipal UserDetails userDetails

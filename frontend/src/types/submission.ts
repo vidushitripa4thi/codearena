@@ -15,6 +15,26 @@ export interface CreateSubmissionRequest {
   sourceCode: string;
 }
 
+export interface TestCaseResult {
+  caseNumber: number;
+  input: string;
+  expectedOutput: string;
+  actualOutput: string;
+  passed: boolean;
+  status: SubmissionStatus;
+  executionTimeMs: number | null;
+  errorMessage?: string | null;
+}
+
+export interface ExecutionResponse {
+  status: SubmissionStatus;
+  compileError?: string | null;
+  executionTimeMs: number | null;
+  totalTestCases: number;
+  passedTestCases: number;
+  testCaseResults: TestCaseResult[];
+}
+
 export interface SubmissionResponse {
   id: number;
   problemId: number;
@@ -27,5 +47,9 @@ export interface SubmissionResponse {
   executionTime: number | null;
   memoryUsed: number | null;
   submittedAt: string;
+  compileError?: string | null;
+  totalTestCases?: number | null;
+  passedTestCases?: number | null;
+  testCaseResults?: TestCaseResult[];
 }
 
